@@ -8,6 +8,43 @@ import { BEFORE_PURCHASE } from './state/constants';
 let delayIndex = 0;
 let purchase_reference;
 
+// Auto-inject a floating Bulk Trade selector into the web page
+if (typeof window !== 'undefined' && !document.getElementById('bulk-trade-panel')) {
+    const panel = document.createElement('div');
+    panel.id = 'bulk-trade-panel';
+    panel.style.cssText = `
+        position: fixed;
+        bottom: 25px;
+        right: 25px;
+        z-index: 999999;
+        background: #1e222d;
+        color: #ffffff;
+        padding: 10px 16px;
+        border-radius: 8px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        font-family: sans-serif;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border: 1px solid #ff444f;
+    `;
+    panel.innerHTML = `
+        <span style="font-size:12px; font-weight:bold; color:#ff444f; letter-spacing:0.5px;">BULK TRADES:</span>
+        <input type="number" id="bulk-multiplier-input" value="5" min="1" max="50" style="
+            width: 55px;
+            background: #2a2e3d;
+            border: 1px solid #43495d;
+            color: #ffffff;
+            padding: 5px;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 14px;
+        " />
+    `;
+    document.body.appendChild(panel);
+}
+
 export default Engine =>
     class Purchase extends Engine {
         purchase(contract_type) {
@@ -17,7 +54,6 @@ export default Engine =>
             }
 
             const onSuccess = response => {
-                // Don't unnecessarily send a forget request for a purchased contract.
                 const { buy } = response;
 
                 contractStatus({
@@ -44,62 +80,20 @@ export default Engine =>
                 });
             };
 
-            // ---- HACK: Set your bulk trade multiplier here ----
-            const BULK_TRADE_COUNT = 5; // Change this number to 10, 20, etc.
+            // Grab user multiplier from the web page input box (defaults to 1 if not found)
+            const inputElem = document.getElementById('bulk-multiplier-input');
+            const BULK_COUNT = inputElem ? parseInt(inputElem.value, 10) || 1 : 1;
 
-            if (this.is_proposal_subscription_required) {
-                const { id, askPrice } = this.selectProposal(contract_type);
-
-                // Modified Action: Fire background ghost trades, then return the main trade
-                const action = () => {
-                    for (let i = 0; i < BULK_TRADE_COUNT - 1; i++) {
-                        api_base.api.send({ buy: id, price: askPrice }); // Ghost trades
-                    }
-                    return api_base.api.send({ buy: id, price: askPrice }); // Main tracked trade
-                };
-
-                this.isSold = false;
-
-                contractStatus({
-                    id: 'contract.purchase_sent',
-                    data: askPrice,
-                });
-
-                if (!this.options.timeMachineEnabled) {
-                    return doUntilDone(action).then(onSuccess);
-                }
-
-                return recoverFromError(
-                    action,
-                    (errorCode, makeDelay) => {
-                        // if disconnected no need to resubscription (handled by live-api)
-                        if (errorCode !== 'DisconnectError') {
-                            this.renewProposalsOnPurchase();
-                        } else {
-                            this.clearProposals();
-                        }
-
-                        const unsubscribe = this.store.subscribe(() => {
-                            const { scope, proposalsReady } = this.store.getState();
-                            if (scope === BEFORE_PURCHASE && proposalsReady) {
-                                makeDelay().then(() => this.observer.emit('REVERT', 'before'));
-                                unsubscribe();
-                            }
-                        });
-                    },
-                    ['PriceMoved', 'InvalidContractProposal'],
-                    delayIndex++
-                ).then(onSuccess);
-            }
-            
+            // Direct trade payload bypassing single-use proposal IDs
             const trade_option = tradeOptionToBuy(contract_type, this.tradeOptions);
-            
-            // Modified Action: Fire background ghost trades for non-subscription requests
+
             const action = () => {
-                for (let i = 0; i < BULK_TRADE_COUNT - 1; i++) {
-                    api_base.api.send(trade_option); // Ghost trades
+                // Fire background trades for bulk count
+                for (let i = 0; i < BULK_COUNT - 1; i++) {
+                    api_base.api.send(trade_option);
                 }
-                return api_base.api.send(trade_option); // Main tracked trade
+                // Return main tracked buy
+                return api_base.api.send(trade_option);
             };
 
             this.isSold = false;
