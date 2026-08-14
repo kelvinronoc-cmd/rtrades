@@ -414,7 +414,7 @@ const AppWrapper = observer(() => {
                                     </Suspense>
                                 </div>
                             </div>
-                            {/* NEW: Multi-Bot Grid Arena Tab */}
+                            {/* MULTI-BOT ARENA TAB */}
                             <div
                                 label={
                                     <>
