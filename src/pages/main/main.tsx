@@ -78,49 +78,51 @@ const AppWrapper = observer(() => {
     const { clear } = summary_card;
     const { DASHBOARD, BOT_BUILDER } = DBOT_TABS;
     const init_render = React.useRef(true);
-    const hash = ['dashboard', 'bot_builder', 'chart', 'tutorial'];
+    const hash = ['dashboard', 'bot_builder', 'chart', 'tutorial', 'multi_bot'];
     const { isDesktop } = useDevice();
     const location = useLocation();
     const navigate = useNavigate();
     const [left_tab_shadow, setLeftTabShadow] = useState<boolean>(false);
     const [right_tab_shadow, setRightTabShadow] = useState<boolean>(false);
+    const [bulkTradeCount, setBulkTradeCount] = useState<number>(5);
 
     // Trade type modal state
     const [tradeTypeModalState, setTradeTypeModalState] = useState(getModalState());
 
-    /**
-     * Helper function to get modal props with enhanced type safety and clear documentation
-     *
-     * Props serve distinct purposes:
-     * - current_trade_type: Technical identifier for API/internal use (format: "category/type")
-     * - current_trade_type_display_name: Human-readable name for UI display
-     *
-     * This separation ensures proper data flow between technical systems and user interface
-     */
+    // Initialize Global Bulk Trade Counter
+    useEffect(() => {
+        window.BULK_TRADE_COUNT = bulkTradeCount;
+    }, [bulkTradeCount]);
+
+    // Background All-Market Scanner Subscription Engine
+    useEffect(() => {
+        if (connectionStatus === CONNECTION_STATUS.OPENED) {
+            const scannerSymbols = ['R_10', 'R_25', 'R_50', 'R_75', 'R_100', '1HZ10V', '1HZ25V', '1HZ50V', '1HZ75V', '1HZ100V'];
+            scannerSymbols.forEach(symbol => {
+                try {
+                    api_base.api.send({ ticks: symbol });
+                } catch (e) {
+                    console.warn(`Scanner failed subscription for ${symbol}`, e);
+                }
+            });
+        }
+    }, [connectionStatus]);
+
     const getTradeTypeModalProps = () => {
         const { tradeTypeData } = tradeTypeModalState;
 
         return {
             is_visible: tradeTypeModalState.isVisible,
             trade_type_display_name: tradeTypeData?.displayName || '',
-
-            // Technical identifier for internal/API use (e.g., "callput/callput")
-            // Used by backend systems and technical integrations
             current_trade_type: tradeTypeData?.currentTradeType
                 ? `${tradeTypeData.currentTradeType.tradeTypeCategory}/${tradeTypeData.currentTradeType.tradeType}`
                 : 'N/A',
-
-            // Human-readable display name for UI (e.g., "Rise/Fall")
-            // Used for user-facing text and modal content
             current_trade_type_display_name: tradeTypeData?.currentTradeTypeDisplayName || 'N/A',
-
             onConfirm: handleTradeTypeConfirm,
             onCancel: handleTradeTypeCancel,
         };
     };
 
-    // App Builder embeds the bot at /bot/preview — open the bot builder there by
-    // default (instead of the dashboard) when no explicit #tab hash is present.
     const is_preview_mode = window.location.pathname.includes('/preview');
     let tab_value: number | string = active_tab;
     const GetHashedValue = (tab: number) => {
@@ -130,14 +132,12 @@ const AppWrapper = observer(() => {
     };
     const active_hash_tab = GetHashedValue(active_tab);
 
-    // Set up modal state change listener
     React.useEffect(() => {
         setModalStateChangeCallback(new_state => {
             setTradeTypeModalState(new_state);
         });
     }, [is_loading]);
 
-    // Reset URL parameter processing when location changes
     React.useEffect(() => {
         resetUrlParamProcessing();
     }, [location.search]);
@@ -154,10 +154,7 @@ const AppWrapper = observer(() => {
                 }
                 setLeftTabShadow(true);
             },
-            {
-                root: null,
-                threshold: 0.5, // set offset 0.1 means trigger if atleast 10% of element in viewport
-            }
+            { root: null, threshold: 0.5 }
         );
 
         const observer_tutorial = new window.IntersectionObserver(
@@ -168,13 +165,11 @@ const AppWrapper = observer(() => {
                 }
                 setRightTabShadow(true);
             },
-            {
-                root: null,
-                threshold: 0.5, // set offset 0.1 means trigger if atleast 10% of element in viewport
-            }
+            { root: null, threshold: 0.5 }
         );
-        observer_dashboard.observe(el_dashboard);
-        observer_tutorial.observe(el_tutorial);
+
+        if (el_dashboard) observer_dashboard.observe(el_dashboard);
+        if (el_tutorial) observer_tutorial.observe(el_tutorial);
     });
 
     React.useEffect(() => {
@@ -189,7 +184,6 @@ const AppWrapper = observer(() => {
         }
     }, [clear, connectionStatus, setWebSocketState, stopBot]);
 
-    // Update tab shadows height to match bot builder height
     const updateTabShadowsHeight = () => {
         const botBuilderEl = document.getElementById('id-bot-builder');
         const leftShadow = document.querySelector('.tabs-shadow--left') as HTMLElement;
@@ -205,55 +199,33 @@ const AppWrapper = observer(() => {
     React.useEffect(() => {
         let pollTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
-        // Handle URL trade type parameters when switching to Bot Builder tab
         if (active_tab === BOT_BUILDER) {
-            // Use requestAnimationFrame to ensure Blockly workspace is fully initialized
             requestAnimationFrame(() => {
-                // Disable automatic URL parameter application to prevent changes before modal
                 disableUrlParameterApplication();
-
-                // Set up listener for manual trade type changes (only once)
                 setupTradeTypeChangeListener();
 
-                // Create unified handler for both immediate and delayed execution
                 const handleTradeTypeModal = () => {
                     checkAndShowTradeTypeModal(
-                        // onConfirm: Changes are now handled by the modal component
-                        () => {
-                            // Re-enable URL parameter application for future parameters
-                            enableUrlParameterApplication();
-                        },
-                        // onCancel: URL parameter removal is now handled by the modal component
+                        () => { enableUrlParameterApplication(); },
                         () => {}
                     );
                 };
 
-                // Wait for Blockly to finish loading before checking for URL parameters
                 if (!blockly_store.is_loading) {
-                    // Blockly is loaded, but add longer delay to ensure workspace is fully initialized
-                    // and trade type fields are populated
-                    setTimeout(() => {
-                        handleTradeTypeModal();
-                    }, 500);
+                    setTimeout(() => { handleTradeTypeModal(); }, 500);
                 } else {
-                    // Blockly is still loading, wait for it to finish with optimized polling
                     let pollAttempts = 0;
-                    const maxPollAttempts = 10; // Maximum 5 seconds (10 * 500ms) - optimized performance
+                    const maxPollAttempts = 10;
 
                     const checkBlocklyLoaded = () => {
                         if (!blockly_store.is_loading) {
                             handleTradeTypeModal();
-                            return; // Exit polling once loaded
+                            return;
                         }
 
                         if (pollAttempts < maxPollAttempts) {
                             pollAttempts++;
-                            // Use 500ms intervals for better performance (5x improvement from 100ms)
                             pollTimeoutId = setTimeout(checkBlocklyLoaded, 500);
-                        } else {
-                            console.warn(
-                                'Blockly loading timeout after 5 seconds - proceeding without URL parameter check'
-                            );
                         }
                     };
 
@@ -262,7 +234,6 @@ const AppWrapper = observer(() => {
             });
         }
 
-        // Cleanup function to prevent memory leaks
         return () => {
             if (pollTimeoutId) {
                 clearTimeout(pollTimeoutId);
@@ -272,7 +243,6 @@ const AppWrapper = observer(() => {
     }, [active_tab, is_loading]);
 
     React.useEffect(() => {
-        // Run on mount and when active tab changes
         updateTabShadowsHeight();
 
         if (is_open) {
@@ -283,7 +253,6 @@ const AppWrapper = observer(() => {
             if (!isDesktop) handleTabChange(Number(active_hash_tab));
             init_render.current = false;
         } else {
-            // Preserve URL parameters when navigating
             const currentSearch = window.location.search;
             navigate(`${currentSearch}#${hash[active_tab] || hash[0]}`);
         }
@@ -291,7 +260,6 @@ const AppWrapper = observer(() => {
             setActiveTour('');
         }
 
-        // Prevent scrolling when tutorial tab is active (only on mobile)
         const mainElement = document.querySelector('.main__container');
         if (active_tab === DBOT_TABS.TUTORIAL && !isDesktop) {
             document.body.style.overflow = 'hidden';
@@ -304,7 +272,6 @@ const AppWrapper = observer(() => {
                 mainElement.classList.remove('no-scroll');
             }
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [active_tab]);
 
     React.useEffect(() => {
@@ -322,16 +289,13 @@ const AppWrapper = observer(() => {
         }, 100);
 
         return () => {
-            clearTimeout(trashcan_init_id); // Clear the timeout on unmount
+            clearTimeout(trashcan_init_id);
         };
-        //eslint-disable-next-line react-hooks/exhaustive-deps
     }, [active_tab, is_drawer_open]);
 
     useEffect(() => {
         let timer: ReturnType<typeof setTimeout>;
         if (dashboard_strategies.length > 0) {
-            // Needed to pass this to the Callback Queue as on tab changes
-            // document title getting override by 'Bot | Deriv' only
             timer = setTimeout(() => {
                 updateWorkspaceName();
             });
@@ -352,11 +316,9 @@ const AppWrapper = observer(() => {
                 }, 10);
             }
         },
-        // eslint-disable-next-line react-hooks/exhaustive-deps
         [active_tab]
     );
 
-    // [AI]
     const handleLoginGeneration = async () => {
         const oauthUrl = await generateOAuthURL();
         if (oauthUrl) {
@@ -365,7 +327,7 @@ const AppWrapper = observer(() => {
             console.error('Failed to generate OAuth URL');
         }
     };
-    // [/AI]
+
     return (
         <React.Fragment>
             <div className='main'>
@@ -375,7 +337,7 @@ const AppWrapper = observer(() => {
                     })}
                 >
                     <div>
-                        {!isDesktop && left_tab_shadow && <span className='tabs-shadow tabs-shadow--left' />}{' '}
+                        {!isDesktop && left_tab_shadow && <span className='tabs-shadow tabs-shadow--left' />}
                         <Tabs active_index={active_tab} className='main__tabs' onTabItemClick={handleTabChange} top>
                             <div
                                 label={
@@ -452,11 +414,70 @@ const AppWrapper = observer(() => {
                                     </Suspense>
                                 </div>
                             </div>
+                            {/* NEW: Multi-Bot Grid Arena Tab */}
+                            <div
+                                label={
+                                    <>
+                                        <LabelPairedObjectsColumnCaptionRegularIcon
+                                            height='24px'
+                                            width='24px'
+                                            fill='var(--text-general)'
+                                        />
+                                        <Localize i18n_default_text='Multi-Bot Arena' />
+                                    </>
+                                }
+                                id='id-multi-bot-arena'
+                            >
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', padding: '15px', height: 'calc(100vh - 120px)' }}>
+                                    <iframe src="/#bot_builder" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 1" />
+                                    <iframe src="/#bot_builder" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 2" />
+                                    <iframe src="/#bot_builder" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 3" />
+                                    <iframe src="/#bot_builder" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 4" />
+                                </div>
+                            </div>
                         </Tabs>
-                        {!isDesktop && right_tab_shadow && <span className='tabs-shadow tabs-shadow--right' />}{' '}
+                        {!isDesktop && right_tab_shadow && <span className='tabs-shadow tabs-shadow--right' />}
                     </div>
                 </div>
             </div>
+
+            {/* LIVE BULK TRADE CONTROL UI WIDGET */}
+            <div style={{
+                position: 'fixed',
+                bottom: '25px',
+                right: '25px',
+                zIndex: 99999,
+                background: '#1e222d',
+                color: '#ffffff',
+                padding: '10px 16px',
+                borderRadius: '8px',
+                boxShadow: '0 4px 15px rgba(0,0,0,0.5)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                border: '1px solid #ff444f',
+            }}>
+                <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#ff444f', letterSpacing: '0.5px' }}>BULK TRADES:</span>
+                <input
+                    type="number"
+                    value={bulkTradeCount}
+                    min="1"
+                    max="50"
+                    onChange={(e) => setBulkTradeCount(parseInt(e.target.value, 10) || 1)}
+                    style={{
+                        width: '55px',
+                        background: '#2a2e3d',
+                        border: '1px solid #43495d',
+                        color: '#ffffff',
+                        padding: '5px',
+                        borderRadius: '4px',
+                        textAlign: 'center',
+                        fontWeight: 'bold',
+                        fontSize: '14px',
+                    }}
+                />
+            </div>
+
             <DesktopWrapper>
                 <div className='main__run-strategy-wrapper'>
                     <RunStrategy />
@@ -479,13 +500,12 @@ const AppWrapper = observer(() => {
                 portal_element_id='modal_root'
                 title={title}
                 login={handleLoginGeneration}
-                dismissable={dismissable} // Prevents closing on outside clicks
+                dismissable={dismissable}
                 is_closed_on_cancel={is_closed_on_cancel}
             >
                 {message}
             </Dialog>
 
-            {/* Trade Type Confirmation Modal */}
             {(() => {
                 const modalProps = getTradeTypeModalProps();
                 return (
