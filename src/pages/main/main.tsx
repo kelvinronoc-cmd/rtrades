@@ -94,7 +94,7 @@ const AppWrapper = observer(() => {
         window.BULK_TRADE_COUNT = bulkTradeCount;
     }, [bulkTradeCount]);
 
-    // Background All-Market Scanner Subscription Engine
+    // Cleaned-up Background Scanner Subscription Engine with automatic teardown
     useEffect(() => {
         if (connectionStatus === CONNECTION_STATUS.OPENED) {
             const scannerSymbols = ['R_10', 'R_25', 'R_50', 'R_75', 'R_100', '1HZ10V', '1HZ25V', '1HZ50V', '1HZ75V', '1HZ100V'];
@@ -106,6 +106,16 @@ const AppWrapper = observer(() => {
                 }
             });
         }
+
+        return () => {
+            if (connectionStatus === CONNECTION_STATUS.OPENED) {
+                try {
+                    api_base.api.send({ forget_all: 'ticks' });
+                } catch (e) {
+                    // Cleanup fallback
+                }
+            }
+        };
     }, [connectionStatus]);
 
     const getTradeTypeModalProps = () => {
@@ -414,7 +424,7 @@ const AppWrapper = observer(() => {
                                     </Suspense>
                                 </div>
                             </div>
-                            {/* MULTI-BOT ARENA TAB */}
+                            {/* MULTI-BOT ARENA TAB WITH ISOLATED BOT WORKSPACES */}
                             <div
                                 label={
                                     <>
@@ -429,10 +439,10 @@ const AppWrapper = observer(() => {
                                 id='id-multi-bot-arena'
                             >
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', padding: '15px', height: 'calc(100vh - 120px)' }}>
-                                    <iframe src="/#bot_builder" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 1" />
-                                    <iframe src="/#bot_builder" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 2" />
-                                    <iframe src="/#bot_builder" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 3" />
-                                    <iframe src="/#bot_builder" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 4" />
+                                    <iframe src="/?instance=1#bot_builder" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 1" />
+                                    <iframe src="/?instance=2#bot_builder" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 2" />
+                                    <iframe src="/?instance=3#bot_builder" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 3" />
+                                    <iframe src="/?instance=4#bot_builder" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 4" />
                                 </div>
                             </div>
                         </Tabs>
