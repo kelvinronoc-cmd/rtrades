@@ -86,6 +86,9 @@ const AppWrapper = observer(() => {
     const [right_tab_shadow, setRightTabShadow] = useState<boolean>(false);
     const [bulkTradeCount, setBulkTradeCount] = useState<number>(5);
 
+    // Detect if current instance is rendered inside an iframe context
+    const isIframe = window.self !== window.top;
+
     // Trade type modal state
     const [tradeTypeModalState, setTradeTypeModalState] = useState(getModalState());
 
@@ -94,7 +97,7 @@ const AppWrapper = observer(() => {
         window.BULK_TRADE_COUNT = bulkTradeCount;
     }, [bulkTradeCount]);
 
-    // Cleaned-up Background Scanner Subscription Engine with automatic teardown
+    // Background Scanner Subscription Engine with automatic teardown
     useEffect(() => {
         if (connectionStatus === CONNECTION_STATUS.OPENED) {
             const scannerSymbols = ['R_10', 'R_25', 'R_50', 'R_75', 'R_100', '1HZ10V', '1HZ25V', '1HZ50V', '1HZ75V', '1HZ100V'];
@@ -180,7 +183,12 @@ const AppWrapper = observer(() => {
 
         if (el_dashboard) observer_dashboard.observe(el_dashboard);
         if (el_tutorial) observer_tutorial.observe(el_tutorial);
-    });
+
+        return () => {
+            observer_dashboard.disconnect();
+            observer_tutorial.disconnect();
+        };
+    }, []);
 
     React.useEffect(() => {
         if (connectionStatus !== CONNECTION_STATUS.OPENED) {
@@ -424,69 +432,73 @@ const AppWrapper = observer(() => {
                                     </Suspense>
                                 </div>
                             </div>
-                            {/* MULTI-BOT ARENA TAB WITH ISOLATED BOT WORKSPACES */}
-                            <div
-                                label={
-                                    <>
-                                        <LabelPairedObjectsColumnCaptionRegularIcon
-                                            height='24px'
-                                            width='24px'
-                                            fill='var(--text-general)'
-                                        />
-                                        <Localize i18n_default_text='Multi-Bot Arena' />
-                                    </>
-                                }
-                                id='id-multi-bot-arena'
-                            >
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', padding: '15px', height: 'calc(100vh - 120px)' }}>
-                                    <iframe src="/?instance=1#bot_builder" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 1" />
-                                    <iframe src="/?instance=2#bot_builder" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 2" />
-                                    <iframe src="/?instance=3#bot_builder" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 3" />
-                                    <iframe src="/?instance=4#bot_builder" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 4" />
+                            {/* MULTI-BOT ARENA TAB */}
+                            {!isIframe && (
+                                <div
+                                    label={
+                                        <>
+                                            <LabelPairedObjectsColumnCaptionRegularIcon
+                                                height='24px'
+                                                width='24px'
+                                                fill='var(--text-general)'
+                                            />
+                                            <Localize i18n_default_text='Multi-Bot Arena' />
+                                        </>
+                                    }
+                                    id='id-multi-bot-arena'
+                                >
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', padding: '15px', height: 'calc(100vh - 120px)' }}>
+                                        <iframe src="./index.html?instance=1#bot_builder" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 1" />
+                                        <iframe src="./index.html?instance=2#bot_builder" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 2" />
+                                        <iframe src="./index.html?instance=3#bot_builder" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 3" />
+                                        <iframe src="./index.html?instance=4#bot_builder" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 4" />
+                                    </div>
                                 </div>
-                            </div>
+                            )}
                         </Tabs>
                         {!isDesktop && right_tab_shadow && <span className='tabs-shadow tabs-shadow--right' />}
                     </div>
                 </div>
             </div>
 
-            {/* LIVE BULK TRADE CONTROL UI WIDGET */}
-            <div style={{
-                position: 'fixed',
-                bottom: '25px',
-                right: '25px',
-                zIndex: 99999,
-                background: '#1e222d',
-                color: '#ffffff',
-                padding: '10px 16px',
-                borderRadius: '8px',
-                boxShadow: '0 4px 15px rgba(0,0,0,0.5)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                border: '1px solid #ff444f',
-            }}>
-                <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#ff444f', letterSpacing: '0.5px' }}>BULK TRADES:</span>
-                <input
-                    type="number"
-                    value={bulkTradeCount}
-                    min="1"
-                    max="50"
-                    onChange={(e) => setBulkTradeCount(parseInt(e.target.value, 10) || 1)}
-                    style={{
-                        width: '55px',
-                        background: '#2a2e3d',
-                        border: '1px solid #43495d',
-                        color: '#ffffff',
-                        padding: '5px',
-                        borderRadius: '4px',
-                        textAlign: 'center',
-                        fontWeight: 'bold',
-                        fontSize: '14px',
-                    }}
-                />
-            </div>
+            {/* LIVE BULK TRADE CONTROL UI WIDGET (ONLY RENDERED ON TOP WINDOW) */}
+            {!isIframe && (
+                <div style={{
+                    position: 'fixed',
+                    bottom: '25px',
+                    right: '25px',
+                    zIndex: 99999,
+                    background: '#1e222d',
+                    color: '#ffffff',
+                    padding: '10px 16px',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 15px rgba(0,0,0,0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    border: '1px solid #ff444f',
+                }}>
+                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#ff444f', letterSpacing: '0.5px' }}>BULK TRADES:</span>
+                    <input
+                        type="number"
+                        value={bulkTradeCount}
+                        min="1"
+                        max="50"
+                        onChange={(e) => setBulkTradeCount(parseInt(e.target.value, 10) || 1)}
+                        style={{
+                            width: '55px',
+                            background: '#2a2e3d',
+                            border: '1px solid #43495d',
+                            color: '#ffffff',
+                            padding: '5px',
+                            borderRadius: '4px',
+                            textAlign: 'center',
+                            fontWeight: 'bold',
+                            fontSize: '14px',
+                        }}
+                    />
+                </div>
+            )}
 
             <DesktopWrapper>
                 <div className='main__run-strategy-wrapper'>
