@@ -754,3 +754,14 @@
     align-items: center;
     justify-content: center;
 }
+/* Clean child layout when rendered inside iframe */
+body.iframe-mode {
+    .deriv-header,
+    .main__tabs .dc-tabs__list {
+        display: none !important;
+    }
+    .main__container {
+        height: 100vh !important;
+        padding: 0 !important;
+    }
+}

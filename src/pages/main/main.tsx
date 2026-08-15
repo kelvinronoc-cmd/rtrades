@@ -89,6 +89,15 @@ const AppWrapper = observer(() => {
     // Detect if current instance is rendered inside an iframe context
     const isIframe = window.self !== window.top;
 
+    // Suppress parent shell UI components inside iframe instances
+    useEffect(() => {
+        if (isIframe) {
+            document.body.classList.add('iframe-mode');
+        } else {
+            document.body.classList.remove('iframe-mode');
+        }
+    }, [isIframe]);
+
     // Trade type modal state
     const [tradeTypeModalState, setTradeTypeModalState] = useState(getModalState());
 
@@ -348,7 +357,7 @@ const AppWrapper = observer(() => {
 
     return (
         <React.Fragment>
-            <div className='main'>
+            <div className={classNames('main', { 'main--iframe': isIframe })}>
                 <div
                     className={classNames('main__container', {
                         'main__container--active': active_tour && active_tab === DASHBOARD && !isDesktop,
@@ -432,7 +441,7 @@ const AppWrapper = observer(() => {
                                     </Suspense>
                                 </div>
                             </div>
-                            {/* MULTI-BOT ARENA TAB */}
+                            {/* MULTI-BOT ARENA TAB (ONLY RENDERED ON TOP WINDOW) */}
                             {!isIframe && (
                                 <div
                                     label={
@@ -448,10 +457,10 @@ const AppWrapper = observer(() => {
                                     id='id-multi-bot-arena'
                                 >
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', padding: '15px', height: 'calc(100vh - 120px)' }}>
-                                        <iframe src="/?instance=1#bot_builder" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 1" />
-                                        <iframe src="/?instance=2#bot_builder" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 2" />
-                                        <iframe src="/?instance=3#bot_builder" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 3" />
-                                        <iframe src="/?instance=4#bot_builder" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 4" />
+                                        <iframe src="/#bot_builder?instance=1" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 1" />
+                                        <iframe src="/#bot_builder?instance=2" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 2" />
+                                        <iframe src="/#bot_builder?instance=3" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 3" />
+                                        <iframe src="/#bot_builder?instance=4" style={{ width: '100%', height: '100%', border: '1px solid #333', borderRadius: '8px' }} title="Strategy 4" />
                                     </div>
                                 </div>
                             )}
